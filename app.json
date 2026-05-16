@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "VOLT",
+    "slug": "volt-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "volt",
+    "plugins": ["expo-router"],
+    "splash": {
+      "backgroundColor": "#F7FAF9"
+    },
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
