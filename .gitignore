@@ -5,6 +5,7 @@ dist-android/
 dist-ios/
 web-build/
 expo-server*.log
+backend/*.log
 npm-debug.*
 yarn-debug.*
 yarn-error.*

@@ -3,10 +3,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { usePathname, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  Bot,
   ClipboardList,
   Home,
   IdCard,
+  Radio,
   ShieldAlert,
   UserRound
 } from "lucide-react-native";
@@ -22,7 +22,7 @@ interface AppShellProps {
 const mainTabs: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/household", label: "Profile", icon: UserRound },
-  { href: "/bulletin", label: "AI", icon: Bot },
+  { href: "/bulletin", label: "Bulletin", icon: Radio },
   { href: "/plan", label: "Plan", icon: ClipboardList },
   { href: "/offline-card", label: "Card", icon: IdCard }
 ];
