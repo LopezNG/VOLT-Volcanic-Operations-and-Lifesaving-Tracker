@@ -17,3 +17,5 @@ yarn-error.*
 *.orig.*
 .env
 .env.*
+backend/.env
+!backend/.env.example

@@ -13,8 +13,34 @@ export interface TaalBulletin {
 export interface TaalBulletinExplanation {
   id: number;
   sourceUrl: string;
-  plainLanguageSummary: string[];
+  model: string;
+  whatHappened: string[];
+  whatItMeans: string[];
+  whatToAvoid: string[];
+  whatToPrepare: string[];
+  highRiskPeople: string[];
+  uncertainty: string;
   safetyNote: string;
+  generatedAt: string;
+  fallback?: boolean;
+  fallbackReason?: string;
+}
+
+export interface TaalBulletinExplainContext {
+  household?: {
+    elderly?: boolean;
+    children?: number;
+    infants?: number;
+    asthma?: boolean;
+    respiratorySensitivity?: boolean;
+    mobilityIssues?: boolean;
+    pets?: boolean;
+    vehicleAvailable?: boolean;
+  };
+  riskProfile?: {
+    barangay?: string;
+    hazards?: string[];
+  };
 }
 
 const API_PATH = "/api/bulletins/taal";
@@ -43,8 +69,8 @@ function inferLanBaseUrl() {
 
 export const TAAL_BULLETIN_API_BASE_URL = getConfiguredBaseUrl() ?? inferLanBaseUrl();
 
-async function requestJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${TAAL_BULLETIN_API_BASE_URL}${API_PATH}${path}`);
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${TAAL_BULLETIN_API_BASE_URL}${API_PATH}${path}`, init);
   const text = await response.text();
 
   if (!response.ok) {
@@ -80,4 +106,17 @@ export function explainTaalBulletinById(id: number | string) {
 
 export function explainLatestTaalBulletin() {
   return requestJson<TaalBulletinExplanation>("/latest/explain");
+}
+
+export function explainTaalBulletinWithContext(
+  id: number | string,
+  context: TaalBulletinExplainContext
+) {
+  return requestJson<TaalBulletinExplanation>(`/${encodeURIComponent(id)}/explain`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(context)
+  });
 }

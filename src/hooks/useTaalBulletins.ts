@@ -3,9 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import {
   explainLatestTaalBulletin,
   explainTaalBulletinById,
+  explainTaalBulletinWithContext,
   getLatestTaalBulletin,
   getTaalBulletinById
 } from "../services/taalBulletinApi";
+import type { TaalBulletinExplainContext } from "../services/taalBulletinApi";
 
 const bulletinQuerySettings = {
   staleTime: 1000 * 60 * 30,
@@ -55,6 +57,24 @@ export function useExplainLatestTaalBulletin() {
   return useQuery({
     queryKey: ["taal-bulletins", "latest", "explain"],
     queryFn: explainLatestTaalBulletin,
+    ...bulletinQuerySettings
+  });
+}
+
+export function useExplainTaalBulletinWithContext(
+  id: number | string | undefined,
+  context: TaalBulletinExplainContext | undefined
+) {
+  const bulletinId = normalizeId(id);
+
+  return useQuery({
+    queryKey: ["taal-bulletins", bulletinId, "explain", context],
+    queryFn: () =>
+      explainTaalBulletinWithContext(
+        bulletinId as number | string,
+        context as TaalBulletinExplainContext
+      ),
+    enabled: bulletinId !== undefined && context !== undefined,
     ...bulletinQuerySettings
   });
 }

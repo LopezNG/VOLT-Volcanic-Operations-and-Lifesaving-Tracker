@@ -1,11 +1,10 @@
 const express = require("express");
 
 const {
-  findLatestTaalBulletinId,
   getLatestTaalBulletin,
   getTaalBulletinById
 } = require("../services/taalBulletins.service");
-const { explainBulletin } = require("../utils/explainBulletin");
+const { explainTaalBulletinWithGeminiFallback } = require("../services/gemini.service");
 
 const router = express.Router();
 
@@ -38,7 +37,7 @@ router.get(
   "/latest/explain",
   asyncHandler(async (_req, res) => {
     const bulletin = await getLatestTaalBulletin();
-    res.json(explainBulletin(bulletin));
+    res.json(await explainTaalBulletinWithGeminiFallback(bulletin));
   })
 );
 
@@ -56,9 +55,17 @@ router.get(
   asyncHandler(async (req, res) => {
     const id = parseBulletinId(req.params.id);
     const bulletin = await getTaalBulletinById(id);
-    res.json(explainBulletin(bulletin));
+    res.json(await explainTaalBulletinWithGeminiFallback(bulletin));
+  })
+);
+
+router.post(
+  "/:id/explain",
+  asyncHandler(async (req, res) => {
+    const id = parseBulletinId(req.params.id);
+    const bulletin = await getTaalBulletinById(id);
+    res.json(await explainTaalBulletinWithGeminiFallback(bulletin, req.body));
   })
 );
 
 module.exports = router;
-

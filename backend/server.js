@@ -1,3 +1,7 @@
+const path = require("path");
+
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+
 const cors = require("cors");
 const express = require("express");
 
@@ -38,4 +42,3 @@ app.use((error, _req, res, _next) => {
 app.listen(port, () => {
   console.log(`VOLT bulletin backend listening on http://0.0.0.0:${port}`);
 });
-

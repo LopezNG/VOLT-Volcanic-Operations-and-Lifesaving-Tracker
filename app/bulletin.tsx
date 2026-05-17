@@ -73,37 +73,67 @@ export default function BulletinScreen() {
             />
           </Card>
 
-          <Card tone="info">
+          <Card tone={explanation?.fallback ? "warning" : "info"}>
             <SectionHeading
-              title="Rule-based summary"
+              title="AI explainer"
               action={
                 <Badge
-                  label={explanationQuery.isFetching ? "Updating" : "Cached"}
-                  tone={explanationQuery.isFetching ? "warning" : "success"}
+                  label={
+                    explanation?.fallback
+                      ? "Fallback"
+                      : explanation
+                        ? "Gemini"
+                        : explanationQuery.isFetching
+                          ? "Loading"
+                          : "Ready"
+                  }
+                  tone={
+                    explanation?.fallback
+                      ? "warning"
+                      : explanationQuery.isFetching
+                        ? "warning"
+                        : "success"
+                  }
                 />
               }
             />
+            {explanationQuery.isLoading ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={styles.loadingText}>Preparing the AI explanation...</Text>
+              </View>
+            ) : null}
+            {explanationQuery.isError && !explanation ? (
+              <>
+                <Text style={styles.errorText}>{getErrorMessage(explanationQuery.error)}</Text>
+                <PrimaryButton label="Try again" icon={RefreshCw} onPress={refresh} />
+              </>
+            ) : null}
             {explanation ? (
               <>
-                {explanation.plainLanguageSummary.map((item) => (
-                  <View style={styles.item} key={item}>
-                    <View style={styles.dot} />
-                    <Text style={styles.itemText}>{item}</Text>
+                {explanation.fallback ? (
+                  <View style={styles.fallbackBox}>
+                    <AlertTriangle color="#6F4A00" size={17} strokeWidth={2.4} />
+                    <Text style={styles.fallbackText}>
+                      Gemini is unavailable, so VOLT is showing a rule-based explanation.
+                    </Text>
                   </View>
-                ))}
+                ) : null}
+                <Text style={styles.modelText}>Model: {explanation.model}</Text>
+                <ExplanationSection title="What happened" items={explanation.whatHappened} />
+                <ExplanationSection title="What it means" items={explanation.whatItMeans} />
+                <ExplanationSection title="What to avoid" items={explanation.whatToAvoid} />
+                <ExplanationSection title="What to prepare" items={explanation.whatToPrepare} />
+                <ExplanationSection title="High-risk people" items={explanation.highRiskPeople} />
+                <InfoRow label="Uncertainty" value={explanation.uncertainty} />
+                <InfoRow label="Source URL" value={explanation.sourceUrl} />
+                <InfoRow label="Generated" value={formatPublishedAt(explanation.generatedAt)} />
                 <View style={styles.safetyRow}>
                   <ShieldAlert color={colors.primary} size={17} strokeWidth={2.4} />
                   <Text style={styles.safetyText}>{explanation.safetyNote}</Text>
                 </View>
               </>
-            ) : explanationQuery.isError ? (
-              <Text style={styles.errorText}>{getErrorMessage(explanationQuery.error)}</Text>
-            ) : (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.primary} />
-                <Text style={styles.loadingText}>Preparing the rule-based explanation...</Text>
-              </View>
-            )}
+            ) : null}
           </Card>
 
           <Card tone="surface">
@@ -134,6 +164,20 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
       <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
+
+function ExplanationSection({ title, items }: { title: string; items: string[] }) {
+  return (
+    <View style={styles.explanationSection}>
+      <Text style={styles.explanationTitle}>{title}</Text>
+      {items.map((item) => (
+        <View style={styles.item} key={`${title}-${item}`}>
+          <View style={styles.dot} />
+          <Text style={styles.itemText}>{item}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -217,6 +261,41 @@ const styles = StyleSheet.create({
     fontFamily: font.regular,
     fontSize: 11,
     lineHeight: 15
+  },
+  fallbackBox: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.58)",
+    borderColor: colors.warning,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    padding: 10
+  },
+  fallbackText: {
+    color: "#6F4A00",
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16
+  },
+  modelText: {
+    color: colors.muted,
+    fontFamily: font.medium,
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 15
+  },
+  explanationSection: {
+    gap: 6
+  },
+  explanationTitle: {
+    color: colors.primaryDark,
+    fontFamily: font.medium,
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase"
   },
   item: {
     flexDirection: "row",
