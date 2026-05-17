@@ -4,7 +4,10 @@ const {
   getLatestTaalBulletin,
   getTaalBulletinById
 } = require("../services/taalBulletins.service");
-const { explainTaalBulletinWithGeminiFallback } = require("../services/gemini.service");
+const {
+  explainTaalBulletinWithGeminiFallback,
+  getPublicGeminiStatus
+} = require("../services/gemini.service");
 
 const router = express.Router();
 
@@ -40,6 +43,10 @@ router.get(
     res.json(await explainTaalBulletinWithGeminiFallback(bulletin));
   })
 );
+
+router.get("/debug/gemini", (_req, res) => {
+  res.json(getPublicGeminiStatus());
+});
 
 router.get(
   "/:id",

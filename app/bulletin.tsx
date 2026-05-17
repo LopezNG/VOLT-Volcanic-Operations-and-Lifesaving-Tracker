@@ -9,12 +9,13 @@ import {
   useLatestTaalBulletin
 } from "../src/hooks/useTaalBulletins";
 import { TAAL_BULLETIN_API_BASE_URL } from "../src/services/taalBulletinApi";
+import type { TaalBulletin, TaalBulletinExplanation } from "../src/services/taalBulletinApi";
 
 export default function BulletinScreen() {
   const latestQuery = useLatestTaalBulletin();
   const explanationQuery = useExplainLatestTaalBulletin();
   const bulletin = latestQuery.data;
-  const explanation = explanationQuery.data;
+  const explanation = normalizeExplanation(explanationQuery.data, bulletin);
   const isRefreshing = latestQuery.isFetching || explanationQuery.isFetching;
 
   function refresh() {
@@ -169,6 +170,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function ExplanationSection({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <View style={styles.explanationSection}>
       <Text style={styles.explanationTitle}>{title}</Text>
@@ -180,6 +185,60 @@ function ExplanationSection({ title, items }: { title: string; items: string[] }
       ))}
     </View>
   );
+}
+
+function normalizeExplanation(
+  explanation: TaalBulletinExplanation | undefined,
+  bulletin: TaalBulletin | undefined
+) {
+  if (!explanation) {
+    return undefined;
+  }
+
+  const legacySummary = toStringList(
+    (explanation as TaalBulletinExplanation & { plainLanguageSummary?: unknown })
+      .plainLanguageSummary
+  );
+
+  return {
+    id: explanation.id ?? bulletin?.id,
+    sourceUrl: explanation.sourceUrl ?? bulletin?.sourceUrl ?? "",
+    model: explanation.model ?? (legacySummary.length > 0 ? "backend explainer" : "unknown"),
+    whatHappened: toStringList(explanation.whatHappened, legacySummary),
+    whatItMeans: toStringList(explanation.whatItMeans, [
+      "Treat this as a source-grounded readiness summary, not a forecast."
+    ]),
+    whatToAvoid: toStringList(explanation.whatToAvoid, [
+      "Avoid acting on rumors or unofficial volcano updates."
+    ]),
+    whatToPrepare: toStringList(explanation.whatToPrepare, [
+      "Keep monitoring PHIVOLCS and local government instructions."
+    ]),
+    highRiskPeople: toStringList(explanation.highRiskPeople, [
+      "People who need help moving, children, elderly people, and those sensitive to ash or gas may need extra support."
+    ]),
+    uncertainty:
+      explanation.uncertainty ??
+      "This explanation is based only on the official bulletin text provided.",
+    safetyNote:
+      explanation.safetyNote ??
+      "Always follow official PHIVOLCS advisories and local government instructions.",
+    generatedAt: explanation.generatedAt,
+    fallback: explanation.fallback ?? legacySummary.length > 0,
+    fallbackReason: explanation.fallbackReason
+  };
+}
+
+function toStringList(value: unknown, fallback: string[] = []) {
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+
+  const items = value
+    .map((item) => (typeof item === "string" ? item.replace(/\s+/g, " ").trim() : ""))
+    .filter(Boolean);
+
+  return items.length > 0 ? items : fallback;
 }
 
 function formatPublishedAt(value?: string) {

@@ -17,6 +17,14 @@ const CACHE_TTL_MS = 1000 * 60 * 30;
 const GEMINI_TIMEOUT_MS = Number(process.env.GEMINI_TIMEOUT_MS || 10000);
 
 const explanationCache = new Map();
+let lastGeminiStatus = {
+  ok: false,
+  model: DEFAULT_GEMINI_MODEL,
+  configured: false,
+  lastAttemptAt: null,
+  lastSuccessAt: null,
+  lastError: null
+};
 
 function isFresh(cacheEntry) {
   return cacheEntry && cacheEntry.expiresAt > Date.now();
@@ -33,6 +41,14 @@ function getGeminiApiKey() {
   }
 
   return apiKey;
+}
+
+function getPublicGeminiStatus() {
+  return {
+    ...lastGeminiStatus,
+    configured: Boolean(getGeminiApiKey()),
+    model: getGeminiModel()
+  };
 }
 
 function limitString(value, maxLength) {
@@ -223,12 +239,8 @@ async function requestGeminiExplanation(bulletin, context) {
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 900,
-        responseFormat: {
-          text: {
-            mimeType: "application/json",
-            schema: BULLETIN_EXPLANATION_SCHEMA
-          }
-        }
+        responseMimeType: "application/json",
+        responseJsonSchema: BULLETIN_EXPLANATION_SCHEMA
       }
     },
     {
@@ -265,9 +277,27 @@ async function explainTaalBulletinWithGeminiFallback(bulletin, rawContext) {
 
   let explanation;
   try {
+    lastGeminiStatus = {
+      ...getPublicGeminiStatus(),
+      ok: false,
+      lastAttemptAt: new Date().toISOString(),
+      lastError: null
+    };
     explanation = await requestGeminiExplanation(bulletin, context);
+    lastGeminiStatus = {
+      ...getPublicGeminiStatus(),
+      ok: true,
+      lastSuccessAt: new Date().toISOString(),
+      lastError: null
+    };
   } catch (error) {
     const reason = normalizeGeminiError(error);
+    lastGeminiStatus = {
+      ...getPublicGeminiStatus(),
+      ok: false,
+      lastAttemptAt: lastGeminiStatus.lastAttemptAt || new Date().toISOString(),
+      lastError: reason
+    };
     console.warn(`Gemini explainer unavailable: ${reason}`);
     explanation = explainBulletin(bulletin, {
       context,
@@ -286,5 +316,6 @@ async function explainTaalBulletinWithGeminiFallback(bulletin, rawContext) {
 module.exports = {
   DEFAULT_GEMINI_MODEL,
   explainTaalBulletinWithGeminiFallback,
+  getPublicGeminiStatus,
   sanitizeExplanationContext
 };
