@@ -33,9 +33,16 @@ export default function PlanScreen() {
   const household = useVoltStore((state) => state.household);
   const bulletin = useVoltStore((state) => state.bulletin);
   const checklist = useVoltStore((state) => state.checklist);
-  const hazard = useMemo(() => findHazardProfile(household), [household]);
+  const hazardProfiles = useVoltStore((state) => state.hazardProfiles);
+  const hazard = useMemo(
+    () => findHazardProfile(household, hazardProfiles),
+    [household, hazardProfiles]
+  );
   const plan = useMemo(() => buildReadinessPlan(household, hazard, bulletin), [household, hazard, bulletin]);
-  const progress = Math.round((checklist.filter((item) => item.checked).length / checklist.length) * 100);
+  const progress =
+    checklist.length > 0
+      ? Math.round((checklist.filter((item) => item.checked).length / checklist.length) * 100)
+      : 0;
 
   return (
     <AppShell>

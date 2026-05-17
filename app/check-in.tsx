@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { Alert, ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-native";
 import {
   HeartPulse,
   Home,
@@ -12,6 +13,7 @@ import {
 import { AppShell, ScreenHeader } from "../src/components/AppShell";
 import { Badge, Card, PrimaryButton } from "../src/components/ui";
 import { colors, font, radii } from "../src/constants/theme";
+import { sendCheckInSms } from "../src/services/checkInSms";
 import { useVoltStore } from "../src/store/useVoltStore";
 import type { CheckInStatus } from "../src/types";
 
@@ -32,10 +34,54 @@ export default function CheckInScreen() {
   const household = useVoltStore((state) => state.household);
   const checkIn = useVoltStore((state) => state.checkIn);
   const saveCheckIn = useVoltStore((state) => state.saveCheckIn);
+  const [note, setNote] = useState(checkIn?.note ?? "");
+  const [sendingStatus, setSendingStatus] = useState<CheckInStatus | undefined>();
+  const [fallbackMessage, setFallbackMessage] = useState<string | undefined>();
+
+  async function sendStatus(status: CheckInStatus) {
+    const timestamp = new Date().toISOString();
+    setSendingStatus(status);
+
+    try {
+      const result = await sendCheckInSms({
+        status,
+        note,
+        household,
+        contacts: household.contacts,
+        timestamp
+      });
+
+      await saveCheckIn(status, note, {
+        message: result.message,
+        recipientContactIds: result.recipientContactIds,
+        smsAvailable: result.smsAvailable,
+        smsResult: result.smsResult,
+        updatedAt: timestamp
+      });
+
+      if (!result.smsAvailable) {
+        setFallbackMessage(result.message);
+        Alert.alert(
+          "SMS composer unavailable",
+          "VOLT saved the check-in and prepared a message you can copy from this screen."
+        );
+      } else {
+        setFallbackMessage(undefined);
+        Alert.alert("Check-in saved", "VOLT opened your SMS composer and saved the event locally.");
+      }
+    } catch (error) {
+      Alert.alert(
+        "Check-in saved locally failed",
+        error instanceof Error ? error.message : "The SMS composer could not be opened."
+      );
+    } finally {
+      setSendingStatus(undefined);
+    }
+  }
 
   return (
     <AppShell>
-      <ScreenHeader title="Family Check-In" subtitle="Save a low-bandwidth status locally" rightIcon={UsersRound} />
+      <ScreenHeader title="Family Check-In" subtitle="Send SMS and save the event locally" rightIcon={UsersRound} />
 
       <View style={styles.grid}>
         {statusOptions.map((option) => {
@@ -45,10 +91,10 @@ export default function CheckInScreen() {
           return (
             <PrimaryButton
               key={option.status}
-              label={option.label}
+              label={sendingStatus === option.status ? "Opening SMS" : option.label}
               icon={Icon}
               tone={selected ? "primary" : option.tone === "critical" ? "danger" : "light"}
-              onPress={() => saveCheckIn(option.status)}
+              onPress={() => sendStatus(option.status)}
             />
           );
         })}
@@ -58,11 +104,20 @@ export default function CheckInScreen() {
         <View style={styles.noteRow}>
           <MessageSquare color={colors.primary} size={18} strokeWidth={2.5} />
           <Text style={styles.noteText}>
-            VOLT saves your latest status on this phone. A backend can later send SMS first, then
-            sync when internet returns.
+            VOLT opens your phone's SMS composer using saved contacts, then stores the check-in
+            event in SQLite on this phone.
           </Text>
         </View>
       </Card>
+
+      {sendingStatus ? (
+        <Card tone="chip">
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.noteText}>Preparing SMS message...</Text>
+          </View>
+        </Card>
+      ) : null}
 
       <Card tone="surface">
         <View style={styles.latestTop}>
@@ -71,8 +126,10 @@ export default function CheckInScreen() {
         </View>
         <Text style={styles.statusText}>{checkIn ? statusCopy(checkIn.status) : "No check-in yet."}</Text>
         <TextInput
-          editable={false}
-          value={checkIn?.note || "Optional note can be added in a backend-enabled version."}
+          value={note}
+          onChangeText={setNote}
+          placeholder="Optional note, shelter name, pickup point, or urgent detail"
+          placeholderTextColor={colors.muted}
           style={styles.noteInput}
           multiline
         />
@@ -81,18 +138,31 @@ export default function CheckInScreen() {
         </Text>
       </Card>
 
+      {fallbackMessage ? (
+        <Card tone="warning">
+          <Text style={styles.sectionTitle}>Copy fallback message</Text>
+          <Text selectable style={styles.fallbackText}>
+            {fallbackMessage}
+          </Text>
+        </Card>
+      ) : null}
+
       <Card tone="surface">
         <Text style={styles.sectionTitle}>Household contacts</Text>
-        {household.contacts.map((contact) => (
-          <View style={styles.contactRow} key={contact.id}>
-            <MapPin color={colors.primary} size={17} strokeWidth={2.3} />
-            <View style={styles.contactCopy}>
-              <Text style={styles.contactName}>{contact.name}</Text>
-              <Text style={styles.contactRole}>{contact.role}</Text>
+        {household.contacts.length > 0 ? (
+          household.contacts.map((contact) => (
+            <View style={styles.contactRow} key={contact.id}>
+              <MapPin color={colors.primary} size={17} strokeWidth={2.3} />
+              <View style={styles.contactCopy}>
+                <Text style={styles.contactName}>{contact.name}</Text>
+                <Text style={styles.contactRole}>{contact.role}</Text>
+              </View>
+              <Text style={styles.phone}>{contact.phone}</Text>
             </View>
-            <Text style={styles.phone}>{contact.phone}</Text>
-          </View>
-        ))}
+          ))
+        ) : (
+          <Text style={styles.updatedText}>Add contacts in Household Profile before sending SMS.</Text>
+        )}
       </Card>
     </AppShell>
   );
@@ -133,6 +203,11 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 16
   },
+  loadingRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
   latestTop: {
     alignItems: "center",
     flexDirection: "row",
@@ -166,6 +241,13 @@ const styles = StyleSheet.create({
     fontFamily: font.regular,
     fontSize: 11,
     lineHeight: 15
+  },
+  fallbackText: {
+    color: "#6F4A00",
+    fontFamily: font.medium,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17
   },
   contactRow: {
     alignItems: "center",

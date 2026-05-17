@@ -29,7 +29,11 @@ export default function DashboardScreen() {
   const bulletin = useVoltStore((state) => state.bulletin);
   const checklist = useVoltStore((state) => state.checklist);
   const checkIn = useVoltStore((state) => state.checkIn);
-  const hazard = useMemo(() => findHazardProfile(household), [household]);
+  const hazardProfiles = useVoltStore((state) => state.hazardProfiles);
+  const hazard = useMemo(
+    () => findHazardProfile(household, hazardProfiles),
+    [household, hazardProfiles]
+  );
   const actions = useMemo(() => getImmediateActions(household, hazard), [household, hazard]);
   const missingCritical = checklist.filter((item) => item.urgency === "critical" && !item.checked).length;
   const packedCount = checklist.filter((item) => item.checked).length;
@@ -40,7 +44,7 @@ export default function DashboardScreen() {
         title="Risk Dashboard"
         subtitle="PHIVOLCS and Batangas LGU synced 16 May, 06:12"
         rightIcon={Bell}
-        onRightPress={() => router.push("/bulletin")}
+        onRightPress={() => router.push("/settings")}
       />
 
       <Card tone="dark">

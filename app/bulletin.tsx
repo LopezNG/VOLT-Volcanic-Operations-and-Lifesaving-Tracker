@@ -5,7 +5,6 @@ import { Share2, Sparkles, Upload, WandSparkles } from "lucide-react-native";
 import { AppShell, ScreenHeader } from "../src/components/AppShell";
 import { Badge, Card, PrimaryButton, SectionHeading } from "../src/components/ui";
 import { colors, font, radii } from "../src/constants/theme";
-import { latestBulletin } from "../src/data/mockData";
 import { explainBulletinWithMockAi } from "../src/services/ai";
 import { findHazardProfile } from "../src/services/bulletin";
 import { useVoltStore } from "../src/store/useVoltStore";
@@ -14,22 +13,26 @@ import type { ExplainerOutput } from "../src/types";
 export default function BulletinScreen() {
   const household = useVoltStore((state) => state.household);
   const bulletin = useVoltStore((state) => state.bulletin);
+  const hazardProfiles = useVoltStore((state) => state.hazardProfiles);
   const savedExplainer = useVoltStore((state) => state.explainer);
   const saveExplainer = useVoltStore((state) => state.saveExplainer);
   const [text, setText] = useState(bulletin.technicalText);
   const [output, setOutput] = useState<ExplainerOutput | undefined>(savedExplainer);
   const [loading, setLoading] = useState(false);
-  const hazard = useMemo(() => findHazardProfile(household), [household]);
+  const hazard = useMemo(
+    () => findHazardProfile(household, hazardProfiles),
+    [household, hazardProfiles]
+  );
 
   async function explain() {
     setLoading(true);
     const result = await explainBulletinWithMockAi({
-      bulletinText: text.trim() || latestBulletin.technicalText,
+      bulletinText: text.trim() || bulletin.technicalText,
       bulletin,
       household,
       hazard
     });
-    saveExplainer(result);
+    await saveExplainer(result);
     setOutput(result);
     setLoading(false);
   }
@@ -75,7 +78,7 @@ export default function BulletinScreen() {
           style={styles.textArea}
         />
         <View style={styles.buttonRow}>
-          <PrimaryButton label="Load sample" icon={Upload} onPress={() => setText(latestBulletin.technicalText)} tone="light" />
+          <PrimaryButton label="Load sample" icon={Upload} onPress={() => setText(bulletin.technicalText)} tone="light" />
           <PrimaryButton label={loading ? "Explaining" : "Explain"} icon={WandSparkles} onPress={explain} />
         </View>
       </Card>

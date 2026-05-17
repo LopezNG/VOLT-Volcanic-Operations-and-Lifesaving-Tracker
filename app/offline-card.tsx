@@ -1,23 +1,24 @@
-import { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { RefreshCw, WifiOff } from "lucide-react-native";
 
 import { AppShell, ScreenHeader } from "../src/components/AppShell";
 import { Badge, Card, PrimaryButton, SectionHeading } from "../src/components/ui";
 import { colors, font } from "../src/constants/theme";
-import { buildReadinessPlan } from "../src/rules/planRules";
-import { findHazardProfile } from "../src/services/bulletin";
 import { useVoltStore } from "../src/store/useVoltStore";
 
 export default function OfflineCardScreen() {
-  const household = useVoltStore((state) => state.household);
-  const bulletin = useVoltStore((state) => state.bulletin);
-  const checklist = useVoltStore((state) => state.checklist);
-  const offlineCardUpdatedAt = useVoltStore((state) => state.offlineCardUpdatedAt);
+  const offlineCardSnapshot = useVoltStore((state) => state.offlineCardSnapshot);
   const refreshOfflineCard = useVoltStore((state) => state.refreshOfflineCard);
-  const hazard = useMemo(() => findHazardProfile(household), [household]);
-  const plan = useMemo(() => buildReadinessPlan(household, hazard, bulletin), [household, hazard, bulletin]);
-  const mustBring = checklist.filter((item) => item.urgency === "critical").slice(0, 4);
+  const [refreshing, setRefreshing] = useState(false);
+  const payload = offlineCardSnapshot?.payload;
+
+  async function refreshSnapshot() {
+    setRefreshing(true);
+    await refreshOfflineCard();
+    setRefreshing(false);
+    Alert.alert("Emergency card saved", "A new offline snapshot was stored in SQLite.");
+  }
 
   return (
     <AppShell>
@@ -27,62 +28,111 @@ export default function OfflineCardScreen() {
         <View style={styles.heroRow}>
           <View style={styles.heroCopy}>
             <Text style={styles.heroTitle}>Emergency Card</Text>
-            <Text style={styles.heroText}>Saved locally on this phone through AsyncStorage.</Text>
+            <Text style={styles.heroText}>Saved locally on this phone through SQLite.</Text>
           </View>
           <Badge label="Offline" tone="dark" />
         </View>
         <View style={styles.locationBox}>
           <Text style={styles.locationLabel}>Saved location</Text>
           <Text style={styles.locationText}>
-            {household.barangay}, {household.municipality}, {household.province}
+            {payload
+              ? `${payload.household.barangay}, ${payload.household.municipality}, ${payload.household.province}`
+              : "No saved snapshot yet"}
           </Text>
         </View>
       </Card>
 
-      <Card tone="surface">
-        <SectionHeading title="Emergency contacts" />
-        {household.contacts.map((contact) => (
-          <View style={styles.contactRow} key={contact.id}>
-            <View style={styles.contactDot} />
-            <View style={styles.contactCopy}>
-              <Text style={styles.contactName}>{contact.name}</Text>
-              <Text style={styles.contactRole}>{contact.role}</Text>
-            </View>
-            <Text style={styles.phone}>{contact.phone}</Text>
-          </View>
-        ))}
-      </Card>
+      {payload ? (
+        <>
+          <Card tone="surface">
+            <SectionHeading
+              title="Checklist progress"
+              action={<Badge label={`${payload.checklistProgress.percent}%`} tone="info" />}
+            />
+            <Text style={styles.sourceText}>
+              {payload.checklistProgress.packed} of {payload.checklistProgress.total} items packed.
+              Critical missing:{" "}
+              {payload.checklistProgress.criticalMissing.length > 0
+                ? payload.checklistProgress.criticalMissing.join(", ")
+                : "none"}.
+            </Text>
+          </Card>
 
-      <Card tone="surface">
-        <Text style={styles.sectionTitle}>Household plan</Text>
-        {plan
-          .find((section) => section.id === "ashfall")
-          ?.actions.slice(0, 3)
-          .map((action) => (
-            <Instruction key={action} text={action} />
-          ))}
-      </Card>
+          <Card tone="surface">
+            <SectionHeading title="Emergency contacts" />
+            {payload.contacts.map((contact) => (
+              <View style={styles.contactRow} key={contact.id}>
+                <View style={styles.contactDot} />
+                <View style={styles.contactCopy}>
+                  <Text style={styles.contactName}>{contact.name}</Text>
+                  <Text style={styles.contactRole}>{contact.role}</Text>
+                </View>
+                <Text style={styles.phone}>{contact.phone}</Text>
+              </View>
+            ))}
+          </Card>
 
-      <Card tone="warning">
-        <Text style={styles.warningTitle}>Evacuation reminders</Text>
-        <Instruction text="If LGU orders evacuation, leave immediately and bring the go-bag only." />
-        <Instruction text={household.hasVehicle ? "Use the planned exit route." : "Go to the barangay pickup point because no car is saved."} />
-        <Instruction text={`Bring: ${mustBring.map((item) => item.label).join(", ")}.`} />
-      </Card>
+          <Card tone="surface">
+            <Text style={styles.sectionTitle}>Barangay risk profile</Text>
+            <Instruction
+              text={`${payload.hazardProfile.barangay}, ${payload.hazardProfile.municipality}: ${payload.hazardProfile.distanceNote}`}
+            />
+            <Instruction
+              text={`Ashfall: ${payload.hazardProfile.ashfall}. Gas: ${payload.hazardProfile.volcanicGas}. Lake hazard: ${payload.hazardProfile.lakeHazard}.`}
+            />
+            <Instruction text={payload.hazardProfile.evacuationNote} />
+          </Card>
 
-      <Card tone="surface">
-        <Text style={styles.sectionTitle}>Ashfall steps</Text>
-        <Instruction text="Stay indoors, seal windows and doors, and keep masks available." />
-        <Instruction text="Keep children, elderly members, pets, and asthma patients indoors." />
-        <Instruction text="Avoid dry sweeping ash; dampen lightly when cleanup is advised." />
-      </Card>
+          <Card tone="surface">
+            <Text style={styles.sectionTitle}>Latest local guidance</Text>
+            <Text style={styles.sourceText}>{payload.latestGuidance.summary}</Text>
+            {payload.latestGuidance.planActions.slice(0, 3).map((action) => (
+              <Instruction key={action} text={action} />
+            ))}
+          </Card>
 
-      <Card tone="chip">
-        <Text style={styles.timestamp}>Last saved: {formatDate(offlineCardUpdatedAt)}</Text>
-        <Text style={styles.sourceText}>Follow PHIVOLCS and local government instructions.</Text>
-      </Card>
+          <Card tone="warning">
+            <Text style={styles.warningTitle}>Evacuation reminders</Text>
+            <Instruction text="If LGU orders evacuation, leave immediately and bring the go-bag only." />
+            <Instruction
+              text={
+                payload.household.hasVehicle
+                  ? "Use the planned exit route."
+                  : "Go to the barangay pickup point because no car is saved."
+              }
+            />
+            <Instruction text={`Bring: ${payload.checklistProgress.criticalItems.join(", ")}.`} />
+          </Card>
 
-      <PrimaryButton label="Refresh saved card" icon={RefreshCw} onPress={refreshOfflineCard} />
+          <Card tone="surface">
+            <Text style={styles.sectionTitle}>Household summary</Text>
+            <Instruction
+              text={`${payload.household.householdSize} people, ${payload.household.elderlyMembers} elderly, ${payload.household.children} children, ${payload.household.infants} infants.`}
+            />
+            <Instruction
+              text={`Respiratory risk: ${
+                payload.household.hasAsthmaOrRespiratory ? "yes" : "no"
+              }. Pets: ${payload.household.pets}.`}
+            />
+          </Card>
+
+          <Card tone="chip">
+            <Text style={styles.timestamp}>Last saved: {formatDate(offlineCardSnapshot.createdAt)}</Text>
+            <Text style={styles.sourceText}>Follow PHIVOLCS and local government instructions.</Text>
+          </Card>
+        </>
+      ) : (
+        <Card tone="warning">
+          <Text style={styles.warningTitle}>No saved card yet</Text>
+          <Text style={styles.sourceText}>Generate an offline snapshot to keep this card available after restart.</Text>
+        </Card>
+      )}
+
+      <PrimaryButton
+        label={refreshing ? "Saving card" : "Refresh saved card"}
+        icon={RefreshCw}
+        onPress={refreshSnapshot}
+      />
     </AppShell>
   );
 }
@@ -90,7 +140,7 @@ export default function OfflineCardScreen() {
 function Instruction({ text }: { text: string }) {
   return (
     <View style={styles.instruction}>
-      <Text style={styles.square}>□</Text>
+      <Text style={styles.square}>[ ]</Text>
       <Text style={styles.instructionText}>{text}</Text>
     </View>
   );

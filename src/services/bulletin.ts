@@ -1,11 +1,15 @@
-import { hazardProfiles, latestBulletin, sampleHazardProfile } from "../data/mockData";
+import { getVoltLocalData } from "../db";
 import type { Bulletin, HazardProfile, HouseholdProfile } from "../types";
 
 export async function getLatestBulletin(): Promise<Bulletin> {
-  return latestBulletin;
+  const data = await getVoltLocalData();
+  return data.bulletin;
 }
 
-export function findHazardProfile(profile: HouseholdProfile): HazardProfile {
+export function findHazardProfile(
+  profile: HouseholdProfile,
+  hazardProfiles: HazardProfile[] = []
+): HazardProfile {
   const match = hazardProfiles.find(
     (hazard) =>
       hazard.province.toLowerCase() === profile.province.toLowerCase() &&
@@ -14,12 +18,17 @@ export function findHazardProfile(profile: HouseholdProfile): HazardProfile {
   );
 
   return match ?? {
-    ...sampleHazardProfile,
     id: `${profile.province}-${profile.municipality}-${profile.barangay}`.toLowerCase(),
     province: profile.province,
     municipality: profile.municipality,
     barangay: profile.barangay,
+    distanceNote: "No saved offline risk profile matches this barangay yet.",
+    ashfall: "Monitor",
+    volcanicGas: "Monitor",
+    baseSurge: "Monitor",
+    lakeHazard: "Monitor",
+    evacuationNote: "Confirm evacuation routes and pickup points with your barangay or LGU.",
     officialSourceNote:
-      "No exact mock hazard match. Treat this as uncertain and follow PHIVOLCS maps and LGU instructions."
+      "No exact local hazard match. Treat this as uncertain and follow PHIVOLCS maps and LGU instructions."
   };
 }

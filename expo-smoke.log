@@ -1,0 +1,17 @@
+Starting project at C:\Users\Neoron\Downloads\VOLT - Volcanic Operations and Lifesaving Tracker
+Starting Metro Bundler
+
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android node_modules\expo-router\entry.js ▓░░░░░░░░░░░░░░░ 11.1% ( 70/246)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 63.2% (563/708)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 73.9% ( 979/2852)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 73.9% (2252/2941)
+Android node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 98.3% (3219/3327)
+Android Bundled 20994ms node_modules\expo-router\entry.js (3540 modules)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 2176ms node_modules\expo-router\entry.js (1 module)
+Android node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Android Bundled 133ms node_modules\expo-router\entry.js (1 module)

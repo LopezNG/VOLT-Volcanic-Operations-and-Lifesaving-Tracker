@@ -78,6 +78,7 @@ export interface ChecklistItem {
   category: "respiratory" | "water" | "medical" | "documents" | "power" | "family" | "pet" | "cash" | "light";
   urgency: Urgency;
   checked: boolean;
+  isCustom?: boolean;
 }
 
 export interface ReadinessSection {
@@ -88,7 +89,68 @@ export interface ReadinessSection {
 }
 
 export interface CheckInRecord {
+  id?: string;
   status: CheckInStatus;
   note: string;
   updatedAt: string;
+  message?: string;
+  recipientContactIds?: string[];
+  smsAvailable?: boolean;
+  smsResult?: string;
+}
+
+export interface AppSettings {
+  setupComplete: boolean;
+}
+
+export type NotificationReminderId = "go-bag" | "bulletin";
+
+export interface NotificationPreference {
+  id: NotificationReminderId;
+  title: string;
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  notificationId?: string;
+  updatedAt: string;
+}
+
+export interface OfflineCardSnapshotPayload {
+  household: {
+    province: string;
+    municipality: string;
+    barangay: string;
+    householdSize: number;
+    elderlyMembers: number;
+    children: number;
+    infants: number;
+    hasPregnantMember: boolean;
+    hasAsthmaOrRespiratory: boolean;
+    hasMobilityLimitations: boolean;
+    pets: number;
+    hasVehicle: boolean;
+  };
+  contacts: EmergencyContact[];
+  hazardProfile: HazardProfile;
+  checklistProgress: {
+    packed: number;
+    total: number;
+    percent: number;
+    criticalMissing: string[];
+    criticalItems: string[];
+  };
+  latestGuidance: {
+    title: string;
+    summary: string;
+    source: string;
+    issuedAt: string;
+    planActions: string[];
+  };
+  generatedAt: string;
+}
+
+export interface OfflineCardSnapshot {
+  id: string;
+  createdAt: string;
+  payload: OfflineCardSnapshotPayload;
 }
