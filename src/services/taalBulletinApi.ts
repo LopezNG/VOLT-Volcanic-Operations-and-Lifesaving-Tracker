@@ -49,10 +49,19 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+function normalizeBaseUrl(value: string) {
+  const trimmed = trimTrailingSlash(value.trim());
+
+  return trimmed.replace(
+    /^(https?:\/\/(?:\d{1,3}\.){3}\d{1,3})\.(\d{2,5})(\/.*)?$/i,
+    "$1:$2$3"
+  );
+}
+
 function getConfiguredBaseUrl() {
   const configured = Constants.expoConfig?.extra?.taalBulletinApiBaseUrl;
   return typeof configured === "string" && configured.trim().length > 0
-    ? trimTrailingSlash(configured.trim())
+    ? normalizeBaseUrl(configured)
     : undefined;
 }
 
