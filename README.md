@@ -1,262 +1,791 @@
-# EduSense
+# VOLT - Volcanic Operations and Lifesaving Tracker - Current Build Update
 
-**EduSense** is a hackathon prototype of an **AI-powered student success assistant** embedded inside a simulated LMS dashboard. It combines a polished React dashboard, local mock school data, and a multi-agent assistant layer that can answer contextual questions about attendance, assignments, grades, schedules, announcements, and support interventions.
-
-Built for reliable live demos, EduSense keeps the product experience realistic while avoiding fragile external school integrations. The result is a clean, judge-friendly prototype that shows how AI can help students understand what needs attention, why it matters, and what to do next.
-
----
-
-## Table of Contents
-
-- [Why This Project](#why-this-project)
-- [Key Features](#key-features)
-- [Workflow and Architecture](#workflow-and-architecture)
-- [Assistant Agents](#assistant-agents)
-- [Provider Modes](#provider-modes)
-- [Validation Status](#validation-status)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [API Endpoints](#api-endpoints)
-- [Example Assistant Request](#example-assistant-request)
-- [Running Locally](#running-locally)
-- [Demo Notes](#demo-notes)
-
----
+**VOLT** is an Expo React Native emergency readiness app for Taal Volcano households, pairing an offline-first mobile interface with a Node/Express bulletin backend, live PHIVOLCS scraping, local SQLite persistence, SMS check-ins, reminders, and optional Gemini-powered bulletin explanations.
 
 ## Why This Project
 
-Students often have the right data available somewhere in their LMS, but the data is fragmented across courses, announcements, calendars, gradebooks, and advisor notes.
+Volcanic risk information is often scattered across official bulletins, local government advisories, household needs, emergency contacts, go-bag readiness, and real-time family status. During a stressful event, that fragmentation makes it harder for families to understand what matters now and what action to take next.
 
-**EduSense** explores how a student-facing AI assistant can turn that scattered context into clear, timely guidance:
+**VOLT** turns that fragmented context into clear, timely utility by combining:
 
-- **What needs attention**
-- **Why it matters**
-- **What the student can do next**
+- Official-source Taal bulletin retrieval.
+- Household-specific risk and readiness rules.
+- Local emergency profiles and contacts.
+- Offline emergency card snapshots.
+- SMS-based family check-ins.
+- Optional AI explanations with deterministic fallback behavior.
 
-The project is intentionally mock-data driven so it can be demonstrated reliably during judging without depending on a live school integration.
-
----
+The project is scoped as an **Expo-first mobile prototype** with durable on-device state and a separately runnable backend. It includes seeded local demo data for reliable offline flows, while the backend can retrieve live PHIVOLCS Taal bulletin pages and explain them through Gemini when a valid API key is configured.
 
 ## Key Features
 
-- **Contextual LMS dashboard:** Displays student profile details, course progress, assignments, announcements, schedule, attendance, and agent activity from local JSON data.
-- **Floating AI assistant:** Provides an embedded chat experience inside the dashboard rather than a separate chatbot page.
-- **Multi-agent routing:** Routes student questions by intent to specialized assistant agents for attendance, grades, deadlines, support, schedules, and announcements.
-- **Ollama provider with fallback:** Attempts local Ollama generation first, then falls back to deterministic rule-based responses if the local model provider is unavailable.
-- **Action-oriented replies:** Assistant responses include short next-step actions where applicable.
-- **Persistent chat state:** The popup chat persists in browser `localStorage`.
-- **Archive and clear chat controls:** Users can archive a conversation locally or clear the visible chat transcript.
-- **Responsive composer:** The chat input expands dynamically for multi-line messages.
-- **Mock API boundary:** The client talks to an Express API, keeping frontend rendering separate from assistant and data logic.
+- **Risk dashboard:** Summarizes current alert context, barangay exposure, checklist progress, family check-in status, and immediate action prompts from locally persisted household data.
+- **Live Taal bulletin screen:** Fetches the latest Taal Volcano bulletin through a backend API that scrapes and parses PHIVOLCS bulletin pages.
+- **AI bulletin explainer:** Produces concise, source-grounded explanations for official bulletins through Gemini, with a rule-based fallback when Gemini is unavailable.
+- **Household readiness profile:** Stores location, family composition, vulnerable household members, transport availability, pets, and emergency contacts locally on-device.
+- **Adaptive readiness plan:** Builds action sections for normal preparedness, ashfall, gas exposure, evacuation preparation, and evacuate-now guidance from the household profile, hazard profile, and bulletin.
+- **Go-bag checklist:** Tracks seeded and custom emergency supplies, highlights missing critical items, supports category filters, and persists custom edits in SQLite.
+- **Family check-in via SMS:** Builds status messages, opens the device SMS composer when available, and saves each check-in event locally.
+- **Offline emergency card:** Generates a local snapshot containing household data, contacts, checklist readiness, risk profile, and latest guidance for weak or no internet scenarios.
+- **Local reminders:** Schedules device-local reminders for go-bag checks and bulletin reviews using Expo notifications.
+- **Mobile shell navigation:** Uses Expo Router, a shared app shell, bottom navigation, reusable cards, badges, buttons, and custom design tokens.
 
----
-
-## Workflow and Architecture
+## Workflow / Architecture
 
 ```text
-Student opens dashboard
-  -> React + Vite client requests dashboard context
-  -> Express API reads local JSON LMS data
-  -> Dashboard renders student, course, assignment, schedule, and agent panels
-  -> Student asks assistant a question
-  -> Assistant route loads full mock LMS context
-  -> Intent detector selects an agent
-  -> Ollama model is called when available
-  -> Rule-based assistant responds if Ollama is unavailable
-  -> Reply and suggested actions return to the floating chat UI
+User opens VOLT on a mobile device
+  -> Expo Router loads the root app shell
+  -> Zustand store initializes application state
+  -> SQLite database opens, migrates, and seeds demo data if needed
+  -> Dashboard renders household profile, bulletin summary, risk metrics, checklist status, and check-in state
+  -> User opens the Taal Bulletin screen
+  -> React Query calls the configured VOLT backend base URL
+  -> Express receives /api/bulletins/taal requests
+  -> Backend fetches PHIVOLCS bulletin HTML through Axios
+  -> Cheerio parses bulletin text, alert level, date, source URL, and metadata
+  -> Backend caches bulletin results for 30 minutes
+  -> User requests an explanation
+  -> Backend sanitizes optional context and builds a source-grounded Gemini prompt
+  -> Gemini returns JSON when GEMINI_API_KEY is configured and the request succeeds
+  -> Rule-based fallback returns deterministic guidance if Gemini is unavailable
+  -> Mobile UI renders the bulletin, explanation, model/fallback status, and safety notes
+  -> User updates checklist, household profile, reminders, check-ins, or offline card
+  -> Zustand writes the change back to SQLite
+  -> VOLT remains usable with locally saved emergency data
 ```
 
-### System Shape
+## Component / Module Details
 
-EduSense separates the experience into three clear layers:
+| Component / Module | Responsibility | Configuration / Tech Setting |
+| --- | --- | --- |
+| **Expo Router app shell** | Provides screen routing, root providers, status bar, bottom navigation, safe-area handling, and notification tap navigation. | `app/_layout.tsx`, `app/*.tsx`, Expo Router |
+| **Dashboard screen** | Presents current alert context, barangay risk profile, checklist status, family check-in state, and immediate action prompts. | `app/dashboard.tsx`, Zustand selectors, readiness rules |
+| **Household profile screen** | Captures location, family needs, transport availability, pets, and emergency contacts. | `app/household.tsx`, SQLite-backed store actions |
+| **Checklist screen** | Tracks seeded and custom go-bag items with progress, filters, edit/delete controls, and critical-item warnings. | `app/checklist.tsx`, `src/components/ChecklistRow.tsx` |
+| **Readiness rules engine** | Converts household profile, hazard profile, and bulletin state into action-oriented preparedness guidance. | `src/rules/planRules.ts` |
+| **Offline card service** | Builds a durable emergency snapshot containing household, contacts, risk, checklist, and latest guidance. | `src/services/offlineCard.ts`, `offline_card_snapshots` table |
+| **Zustand app store** | Coordinates app state, optimistic UI updates, SQLite writes, notifications, check-ins, and reset-to-seed behavior. | `src/store/useVoltStore.ts`, Zustand |
+| **SQLite data layer** | Owns schema migration, seeded demo data, local CRUD operations, notification preferences, check-ins, and snapshots. | `src/db/index.ts`, `volt-local.db`, `DATABASE_VERSION = 1` |
+| **Bulletin API client** | Calls backend bulletin endpoints and exposes typed functions for latest, by-id, and explanation requests. | `src/services/taalBulletinApi.ts`, `app.json` `expo.extra.taalBulletinApiBaseUrl` |
+| **React Query hooks** | Caches bulletin and explanation requests with retry and stale-time behavior. | `src/hooks/useTaalBulletins.ts`, `staleTime = 30 minutes` |
+| **Backend bulletin service** | Discovers, fetches, parses, and caches PHIVOLCS Taal bulletin pages. | `backend/services/taalBulletins.service.js`, Axios, Cheerio |
+| **Gemini explainer service** | Sends JSON-mode bulletin prompts to Gemini, caches explanations, tracks provider status, and falls back safely. | `backend/services/gemini.service.js`, default model `gemini-2.5-flash-lite` |
+| **Rule-based explainer** | Generates deterministic explanation sections when Gemini is missing, unavailable, or invalid. | `backend/utils/explainBulletin.js` |
+| **SMS check-in service** | Builds family status messages, normalizes recipients, opens native SMS composer, and reports fallback state. | `src/services/checkInSms.ts`, `expo-sms` |
+| **Local notification service** | Requests permission, creates Android channel, schedules/cancels daily reminders, and routes notification taps. | `src/services/notifications.ts`, `expo-notifications` |
+| **Design system primitives** | Provides shared cards, buttons, badges, progress bars, form controls, shell layout, and theme tokens. | `src/components/*.tsx`, `src/constants/theme.ts`, `lucide-react-native` |
 
-- **Client:** React dashboard and floating chat UI.
-- **API:** Express routes for LMS data and assistant messages.
-- **Assistant layer:** Intent detection, specialized agent routing, Ollama-backed generation, and deterministic fallback responses.
+> **Configuration note:** Core app configuration lives in `app.json`, TypeScript settings live in `tsconfig.json`, root mobile scripts live in `package.json`, backend scripts and dependencies live in `backend/package.json`, and backend environment values are loaded from `backend/.env`.
 
-This keeps the prototype easy to demo, easy to reason about, and ready for future replacement of mock data with a real LMS integration.
+## Provider / System Modes
 
----
-
-## Assistant Agents
-
-| Agent                    | Responsibility                                                               | Current Model Setting |
-| ------------------------ | ---------------------------------------------------------------------------- | --------------------- |
-| **Pulse Agent**          | Attendance, wellbeing, daily friction, and early warning signals              | `llama3.2:1b`         |
-| **Sense-Maker Agent**    | Academic progress, grades, course patterns, and learning signals              | `deepseek-r1:7b`      |
-| **Success Agent**        | Assignments, deadlines, interventions, and practical next actions             | `deepseek-r1:7b`      |
-| **Admin-Strategy Agent** | Schedules, announcements, rubric updates, rooms, teachers, and logistics      | `deepseek-r1:7b`      |
-
-> **Note:** The model names above are configured in `server/assistant/agents/*.js`. They are used only when a compatible local Ollama server is running.
-
----
-
-## Provider Modes
-
-| Mode                       | How It Works                                                                                                      | Status             |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------ |
-| **Ollama-backed assistant** | `AssistantEngine` calls `OllamaAssistantEngine`, which sends JSON-mode prompts to local Ollama through `OLLAMA_BASE_URL`. | Implemented        |
-| **Rule-based fallback**    | If Ollama fails, `AssistantEngine` logs the failure and returns a deterministic response from `RuleBasedAssistantEngine`. | Implemented        |
-| **Hosted LLM provider**    | A cloud provider integration is not currently wired in.                                                           | Planned / not live |
-
----
+| Mode | How It Works | Status |
+| --- | --- | --- |
+| **Offline-first local mode** | The app initializes SQLite, seeds mock household/hazard/checklist/bulletin data, and keeps readiness state available on-device. | Implemented |
+| **Live PHIVOLCS bulletin mode** | The backend scrapes PHIVOLCS Taal bulletin pages, parses valid bulletin content, and caches successful responses for 30 minutes. | Implemented |
+| **Gemini-backed explanation mode** | The backend sends a constrained JSON prompt to Gemini when `GEMINI_API_KEY` is configured and valid. | Implemented / optional |
+| **Rule-based explanation fallback** | If Gemini is unavailable, unconfigured, times out, or returns invalid content, the backend returns deterministic safety guidance. | Implemented |
+| **SMS composer mode** | The app uses `expo-sms` to open the native SMS composer with saved emergency contacts and a generated check-in message. | Implemented |
+| **SMS fallback mode** | If SMS is unavailable or there are no usable recipients, VOLT saves the check-in locally and displays a copyable fallback message. | Implemented |
+| **Local reminder mode** | The app schedules daily local reminders for go-bag checks and bulletin review after notification permission is granted. | Implemented |
+| **Remote push notifications** | Remote push token registration and push delivery are intentionally deferred for a future EAS/dev-build backend phase. | Planned / not live |
+| **Live LGU integration** | Local government pickup points, shelter assignments, and responder systems are not wired into the app. | Planned / not live |
 
 ## Validation Status
 
-| Area                         | Evidence                                                                                                      | Status         |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------- |
-| **Production build**         | `npm.cmd run build` completes successfully with Vite.                                                         | Passing        |
-| **Local client/server run path** | `npm.cmd run dev` starts the Express API and Vite client concurrently.                                     | Implemented    |
-| **API data routes**          | Student, courses, assignments, announcements, grades, attendance, schedule, interventions, and agent themes are served from JSON files. | Implemented    |
-| **Assistant endpoint**       | `POST /api/assistant/message` validates `studentId` and `message`, loads full context, and returns an assistant response. | Implemented    |
-| **Automated tests**          | No test runner or automated test suite is currently configured in `package.json`.                             | Not configured |
-| **Real LMS integration**     | Uses local mock JSON data only.                                                                               | Not live       |
-
----
+| Area | Evidence | Status |
+| --- | --- | --- |
+| **TypeScript typecheck** | `npm.cmd run typecheck` completed successfully with `tsc --noEmit`. | Passing |
+| **Backend syntax check** | `node --check` passed for `backend/server.js`, route modules, services, and utility files. | Passing |
+| **Local mobile run path** | Root `package.json` exposes `start`, `android`, `ios`, and `web` Expo commands. | Implemented |
+| **Backend run path** | `backend/package.json` exposes `start`, running `node --use-system-ca server.js`. | Implemented |
+| **API routes** | Express serves `/health` and `/api/bulletins/taal/*` routes for latest, by-id, explain, and Gemini status. | Implemented |
+| **Local persistence** | SQLite migration, seeded data, CRUD operations, check-ins, reminders, and offline snapshots are implemented. | Implemented |
+| **Production build script** | No root `build` or `preview` script is currently defined in `package.json`. | Not configured |
+| **Automated tests** | No `test` script, test runner, or automated test suite is currently configured. | Not configured |
+| **Real integrations** | PHIVOLCS bulletin scraping is live-network dependent; Gemini is optional; LGU systems and remote push are not live. | Partial |
 
 ## Tech Stack
 
-| Layer                    | Technology                                           |
-| ------------------------ | ---------------------------------------------------- |
-| **Frontend**             | React 19, Vite 6                                     |
-| **Styling**              | Tailwind CSS, custom theme tokens                    |
-| **Icons**                | Lucide React                                         |
-| **Backend**              | Node.js, Express                                     |
-| **Local data**           | JSON files in `server/data`                          |
-| **Assistant provider**   | Ollama local generation with rule-based fallback     |
-| **Dev orchestration**    | `concurrently`                                       |
-
----
+- **Mobile frontend:** Expo `~55.0.24`, React Native `0.83.6`, React `19.2.0`, Expo Router.
+- **Routing and shell:** `expo-router`, `react-native-safe-area-context`, `react-native-gesture-handler`, `react-native-screens`.
+- **State management:** Zustand.
+- **Data fetching:** TanStack React Query.
+- **Local persistence:** `expo-sqlite` with a versioned SQLite schema and seeded local data.
+- **Native device capabilities:** `expo-sms`, `expo-notifications`, `expo-linking`, `expo-constants`.
+- **Styling:** React Native `StyleSheet`, shared theme tokens, reusable UI primitives.
+- **Icons:** `lucide-react-native` and Expo vector icon dependencies.
+- **Backend:** Node.js, Express `5.2.1`, CORS, dotenv.
+- **Bulletin scraping:** Axios and Cheerio.
+- **AI provider:** Google Gemini REST API through Axios with rule-based fallback.
+- **Language and tooling:** TypeScript strict mode, npm, Expo Metro bundler.
 
 ## Project Structure
 
 ```text
 .
-├── client/
-│   └── src/
-│       ├── App.jsx
-│       ├── components/
-│       │   ├── assistant/          # Floating EduSense chat UI
-│       │   ├── dashboard/          # Dashboard panels and shared card styles
-│       │   └── layout/             # Dashboard shell and navigation
-│       └── services/api.js         # Browser API client
-├── server/
-│   ├── assistant/                  # Intent detection, agents, Ollama, fallback logic
-│   ├── data/                       # Mock LMS JSON data
-│   ├── routes/                     # Express API route modules
-│   └── index.js                    # API server and static production host
-├── index.html
-├── package.json
-├── tailwind.config.js
-└── vite.config.js
+├── app/                                      # Expo Router screens and root layout
+│   ├── _layout.tsx                           # App providers, SQLite initialization, stack setup, notification tap routing
+│   ├── index.tsx                             # Route alias to dashboard
+│   ├── dashboard.tsx                         # Risk dashboard and immediate actions
+│   ├── bulletin.tsx                          # Live Taal bulletin and explainer UI
+│   ├── plan.tsx                              # Household-specific readiness plan
+│   ├── checklist.tsx                         # Go-bag checklist and custom items
+│   ├── check-in.tsx                          # SMS family check-in flow
+│   ├── household.tsx                         # Household profile and emergency contacts
+│   ├── offline-card.tsx                      # Offline emergency card snapshot
+│   └── settings.tsx                          # Local notification permissions and reminders
+├── src/
+│   ├── components/                           # Shared shell, form controls, checklist row, and UI primitives
+│   │   ├── AppShell.tsx
+│   │   ├── ChecklistRow.tsx
+│   │   ├── forms.tsx
+│   │   └── ui.tsx
+│   ├── constants/
+│   │   └── theme.ts                          # Colors, typography, radii, and shadows
+│   ├── data/
+│   │   └── mockData.ts                       # Seed household, hazard profiles, bulletin, and checklist data
+│   ├── db/
+│   │   └── index.ts                          # SQLite schema, migrations, seed data, and persistence functions
+│   ├── hooks/
+│   │   └── useTaalBulletins.ts               # React Query hooks for bulletin API calls
+│   ├── rules/
+│   │   └── planRules.ts                      # Readiness action rules
+│   ├── services/
+│   │   ├── ai.ts                             # Local mock explainer utility retained for demo-style interpretation
+│   │   ├── bulletin.ts                       # Local bulletin lookup and hazard profile matching
+│   │   ├── checkInSms.ts                     # SMS message builder and composer integration
+│   │   ├── notifications.ts                  # Local notification scheduling and tap handling
+│   │   ├── offlineCard.ts                    # Offline card payload builder
+│   │   ├── storage.ts                        # Shared storage key constants
+│   │   └── taalBulletinApi.ts                # Backend API client and response types
+│   ├── store/
+│   │   └── useVoltStore.ts                   # Zustand state store and app actions
+│   ├── types/
+│   │   └── index.ts                          # Shared app domain types
+│   └── utils/
+│       └── id.ts                             # Local ID generator
+├── backend/
+│   ├── routes/
+│   │   └── taalBulletins.routes.js           # Express routes for Taal bulletin API
+│   ├── services/
+│   │   ├── gemini.service.js                 # Gemini provider, cache, sanitization, fallback orchestration
+│   │   └── taalBulletins.service.js          # PHIVOLCS scraping, parsing, discovery, and cache
+│   ├── utils/
+│   │   ├── buildGeminiBulletinPrompt.js      # JSON-schema prompt builder
+│   │   └── explainBulletin.js                # Rule-based fallback explanation
+│   ├── .env.example                          # Backend environment example
+│   ├── package.json                          # Backend dependencies and start script
+│   └── server.js                             # Express app, middleware, health route, and error handling
+├── app.json                                  # Expo app config, scheme, plugins, backend base URL
+├── babel.config.js                           # Babel configuration for Expo
+├── package.json                              # Mobile app dependencies and scripts
+├── package-lock.json                         # Root dependency lockfile
+├── tsconfig.json                             # Strict TypeScript config
+├── VOLT - Volcanic Operations and Lifesaving Tracker.docx # Project document artifact
+├── VOLT - Volcanic Operations and Lifesaving Tracker.pen  # Design artifact
+└── README.md
 ```
-
----
 
 ## API Endpoints
 
-| Method | Endpoint                 | Purpose                           |
-| ------ | ------------------------ | --------------------------------- |
-| `GET`  | `/api/student`           | Student profile and summary data  |
-| `GET`  | `/api/courses`           | Course list and progress data     |
-| `GET`  | `/api/assignments`       | Assignment list and due dates     |
-| `GET`  | `/api/announcements`     | LMS announcements                 |
-| `GET`  | `/api/grades`            | Course grade data                 |
-| `GET`  | `/api/attendance`        | Attendance summary                |
-| `GET`  | `/api/schedule`          | Daily schedule                    |
-| `GET`  | `/api/interventions`     | Mock support interventions        |
-| `GET`  | `/api/agentThemes`       | Agent activity themes             |
-| `POST` | `/api/assistant/message` | Assistant chat response           |
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Backend health check returning `{ "ok": true }`. |
+| `GET` | `/api/bulletins/taal/latest` | Discovers and returns the latest valid Taal bulletin parsed from PHIVOLCS. |
+| `GET` | `/api/bulletins/taal/latest/explain` | Returns an explanation for the latest bulletin using Gemini or rule-based fallback. |
+| `GET` | `/api/bulletins/taal/debug/gemini` | Returns public Gemini provider status, configuration state, model, and latest error metadata. |
+| `GET` | `/api/bulletins/taal/:id` | Returns a specific PHIVOLCS Taal bulletin by positive integer bulletin ID. |
+| `GET` | `/api/bulletins/taal/:id/explain` | Returns an explanation for a specific bulletin without additional context. |
+| `POST` | `/api/bulletins/taal/:id/explain` | Returns an explanation for a specific bulletin with optional sanitized household and risk context. |
 
----
-
-## Example Assistant Request
+Example explanation request:
 
 ```json
 {
-  "studentId": "student_001",
-  "message": "What assignments are due this week?"
+  "household": {
+    "elderly": true,
+    "children": 1,
+    "infants": 0,
+    "asthma": true,
+    "mobilityIssues": false,
+    "pets": true,
+    "vehicleAvailable": false
+  },
+  "riskProfile": {
+    "barangay": "Banga, Talisay, Batangas",
+    "hazards": ["ashfall", "volcanic gas", "lake hazard"]
+  }
 }
 ```
 
-### Expected Response Shape
+Example explanation response shape:
 
-The assistant endpoint returns a contextual response for the floating chat UI. When applicable, responses include:
+```json
+{
+  "id": 13947,
+  "sourceUrl": "https://wovodat.phivolcs.dost.gov.ph/bulletin/activity-tvo?bid=13947&lang=en",
+  "model": "gemini-2.5-flash-lite",
+  "whatHappened": [
+    "The bulletin reports observed activity for Taal Volcano."
+  ],
+  "whatItMeans": [
+    "Treat this as a source-grounded readiness summary, not a forecast."
+  ],
+  "whatToAvoid": [
+    "Avoid acting on rumors or unofficial volcano updates."
+  ],
+  "whatToPrepare": [
+    "Keep monitoring PHIVOLCS and local government instructions."
+  ],
+  "highRiskPeople": [
+    "People who need help moving, children, elderly people, and those sensitive to ash or gas may need extra support."
+  ],
+  "uncertainty": "This explanation is based only on the official bulletin text provided.",
+  "safetyNote": "Always follow official PHIVOLCS advisories and local government instructions.",
+  "generatedAt": "2026-05-17T13:00:00.000Z",
+  "fallback": false
+}
+```
 
-- A concise answer.
-- The selected agent or intent category.
-- Suggested next actions.
-- Fallback output if Ollama is unavailable.
+## Local Setup
 
----
-
-## Running Locally
-
-### Prerequisites
-
-- **Node.js** installed locally.
-- **npm** available from the terminal.
-- Optional: **Ollama** running locally with compatible models installed.
-
-### Install Dependencies
+1. **Install mobile app dependencies.**
 
 ```bash
 npm install
 ```
 
-### Start the Development App
+2. **Install backend dependencies.**
 
 ```bash
-npm.cmd run dev
+cd backend
+npm install
+cd ..
 ```
 
-The development command starts both:
-
-- The **Express API** for LMS data and assistant routes.
-- The **Vite client** for the EduSense dashboard.
-
-### Build for Production
+3. **Create backend environment file.**
 
 ```bash
-npm.cmd run build
+cd backend
+copy .env.example .env
+cd ..
 ```
 
----
+Edit `backend/.env` and add a Gemini key if AI-backed explanations are required. Without a valid key, the backend still works through the rule-based fallback.
 
-## Ollama Configuration
+4. **Configure the mobile app backend URL.**
 
-EduSense can call a local Ollama server when available. The assistant layer uses `OLLAMA_BASE_URL` to locate the provider.
+Update `app.json` so the Expo app can reach the backend from the target device:
 
-Example local environment setting:
+```json
+{
+  "expo": {
+    "extra": {
+      "taalBulletinApiBaseUrl": "http://192.168.1.103:3000"
+    }
+  }
+}
+```
+
+Use a LAN IP for Expo Go on a physical device. For browser-based web testing on the same machine, `localhost` may be appropriate. For Android emulator workflows, the backend may need an emulator-accessible host such as `10.0.2.2`.
+
+5. **Start the backend API.**
 
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434
+cd backend
+npm start
 ```
 
-If Ollama is unavailable, the app still works by returning deterministic rule-based assistant responses.
+The backend listens on:
 
----
+```text
+http://0.0.0.0:3000
+```
 
-## Demo Notes
+6. **Start the Expo development server in a second terminal.**
 
-EduSense is designed for predictable hackathon judging:
+```bash
+npm start
+```
 
-- Uses **local mock JSON data** instead of live LMS credentials.
-- Keeps AI responses functional even without a running model provider.
-- Demonstrates realistic student workflows inside a polished dashboard.
-- Shows a clear path from prototype to production integration.
+Then choose the desired target from Expo:
 
----
+```text
+a = Android
+i = iOS
+w = Web
+```
 
-## Current Limitations
+You can also launch platform-specific commands directly:
 
-- No automated test runner is currently configured.
-- No hosted LLM provider is currently wired in.
-- Real LMS integration is not live.
-- All school data is loaded from local JSON files.
+```bash
+npm run android
+npm run ios
+npm run web
+```
 
----
+7. **Run the TypeScript check.**
 
-## Summary
+```bash
+npm run typecheck
+```
 
-**EduSense turns fragmented LMS context into practical student guidance.** It demonstrates how a dashboard-native AI assistant can help students understand academic risk, upcoming work, scheduling details, and support options without leaving the LMS experience.
+8. **Production build / preview status.**
+
+No production `build` or `preview` script is currently defined in the root `package.json`. For submission-grade packaging, add an Expo export or EAS build path, then document the final command here.
+
+## Scripts
+
+| Script | Command | Description |
+| --- | --- | --- |
+| `start` | `expo start` | Starts the Expo development server. |
+| `android` | `expo start --android` | Starts Expo and opens the Android target. |
+| `ios` | `expo start --ios` | Starts Expo and opens the iOS target. |
+| `web` | `expo start --web` | Starts Expo for web through the configured Metro web bundler. |
+| `typecheck` | `tsc --noEmit` | Runs strict TypeScript validation without emitting files. |
+| `backend:start` | `cd backend && npm start` | Starts the Express bulletin backend. This is not a root package script, but is the backend run path. |
+| `test` | Not configured | No automated test command is currently defined. |
+| `build` | Not configured | No production build command is currently defined. |
+
+Backend package script:
+
+| Script | Command | Description |
+| --- | --- | --- |
+| `start` | `node --use-system-ca server.js` | Starts the VOLT bulletin backend with system CA support. |
+
+## Environment Variables
+
+Backend variables are loaded from `backend/.env` through `dotenv`.
+
+```env
+# Optional. If omitted or left as the placeholder value, VOLT uses rule-based explanations.
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional. Defaults to gemini-2.5-flash-lite.
+GEMINI_MODEL=gemini-2.5-flash-lite
+
+# Optional. Defaults to 10000 milliseconds.
+GEMINI_TIMEOUT_MS=10000
+
+# Optional. Defaults to 3000.
+PORT=3000
+```
+
+Client backend URL configuration currently lives in `app.json`, not in a `.env` file:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "taalBulletinApiBaseUrl": "http://192.168.1.103:3000"
+    }
+  }
+}
+```
+
+## Deployment / Submission Notes
+
+- **Mobile app delivery:** The repository is Expo-first. Development is ready through Expo commands, but production packaging should be finalized through Expo export or EAS build before a release submission.
+- **Backend delivery:** The Express backend runs separately from the mobile app and must be reachable from the device or browser running the Expo client.
+- **Live bulletin dependency:** PHIVOLCS scraping depends on the availability and HTML structure of the source bulletin pages. The backend uses a non-aggressive request pattern and 30-minute caching.
+- **AI safety boundary:** Gemini explanations are constrained to official bulletin text and optional sanitized context. The fallback path avoids making forecasts or inventing official instructions.
+- **Offline behavior:** Household profile, emergency contacts, checklist state, check-ins, notification preferences, and emergency card snapshots persist locally in SQLite.
+- **Security warning:** Do not commit `backend/.env` or real API keys. The example file contains only a placeholder.
+- **Current integration scope:** PHIVOLCS bulletin retrieval is live-network capable; Gemini is optional; LGU dispatch systems, real shelter assignment feeds, authentication, and remote push notification infrastructure are not wired in.
+- **Submission readiness:** VOLT is well-positioned as a functional hackathon prototype: the core mobile flows are implemented, local persistence is durable, backend bulletin routes exist, Gemini fallback behavior is handled, and TypeScript validation currently passes.
+
+**VOLT** is an Expo React Native emergency readiness app for Taal Volcano households, pairing an offline-first mobile interface with a Node/Express bulletin backend, live PHIVOLCS scraping, local SQLite persistence, SMS check-ins, reminders, and optional Gemini-powered bulletin explanations.
+
+## Why This Project
+
+Volcanic risk information is often scattered across official bulletins, local government advisories, household needs, emergency contacts, go-bag readiness, and real-time family status. During a stressful event, that fragmentation makes it harder for families to understand what matters now and what action to take next.
+
+**VOLT** turns that fragmented context into clear, timely utility by combining:
+
+- Official-source Taal bulletin retrieval.
+- Household-specific risk and readiness rules.
+- Local emergency profiles and contacts.
+- Offline emergency card snapshots.
+- SMS-based family check-ins.
+- Optional AI explanations with deterministic fallback behavior.
+
+The project is scoped as an **Expo-first mobile prototype** with durable on-device state and a separately runnable backend. It includes seeded local demo data for reliable offline flows, while the backend can retrieve live PHIVOLCS Taal bulletin pages and explain them through Gemini when a valid API key is configured.
+
+## Key Features
+
+- **Risk dashboard:** Summarizes current alert context, barangay exposure, checklist progress, family check-in status, and immediate action prompts from locally persisted household data.
+- **Live Taal bulletin screen:** Fetches the latest Taal Volcano bulletin through a backend API that scrapes and parses PHIVOLCS bulletin pages.
+- **AI bulletin explainer:** Produces concise, source-grounded explanations for official bulletins through Gemini, with a rule-based fallback when Gemini is unavailable.
+- **Household readiness profile:** Stores location, family composition, vulnerable household members, transport availability, pets, and emergency contacts locally on-device.
+- **Adaptive readiness plan:** Builds action sections for normal preparedness, ashfall, gas exposure, evacuation preparation, and evacuate-now guidance from the household profile, hazard profile, and bulletin.
+- **Go-bag checklist:** Tracks seeded and custom emergency supplies, highlights missing critical items, supports category filters, and persists custom edits in SQLite.
+- **Family check-in via SMS:** Builds status messages, opens the device SMS composer when available, and saves each check-in event locally.
+- **Offline emergency card:** Generates a local snapshot containing household data, contacts, checklist readiness, risk profile, and latest guidance for weak or no internet scenarios.
+- **Local reminders:** Schedules device-local reminders for go-bag checks and bulletin reviews using Expo notifications.
+- **Mobile shell navigation:** Uses Expo Router, a shared app shell, bottom navigation, reusable cards, badges, buttons, and custom design tokens.
+
+## Workflow / Architecture
+
+```text
+User opens VOLT on a mobile device
+  -> Expo Router loads the root app shell
+  -> Zustand store initializes application state
+  -> SQLite database opens, migrates, and seeds demo data if needed
+  -> Dashboard renders household profile, bulletin summary, risk metrics, checklist status, and check-in state
+  -> User opens the Taal Bulletin screen
+  -> React Query calls the configured VOLT backend base URL
+  -> Express receives /api/bulletins/taal requests
+  -> Backend fetches PHIVOLCS bulletin HTML through Axios
+  -> Cheerio parses bulletin text, alert level, date, source URL, and metadata
+  -> Backend caches bulletin results for 30 minutes
+  -> User requests an explanation
+  -> Backend sanitizes optional context and builds a source-grounded Gemini prompt
+  -> Gemini returns JSON when GEMINI_API_KEY is configured and the request succeeds
+  -> Rule-based fallback returns deterministic guidance if Gemini is unavailable
+  -> Mobile UI renders the bulletin, explanation, model/fallback status, and safety notes
+  -> User updates checklist, household profile, reminders, check-ins, or offline card
+  -> Zustand writes the change back to SQLite
+  -> VOLT remains usable with locally saved emergency data
+```
+
+## Component / Module Details
+
+| Component / Module | Responsibility | Configuration / Tech Setting |
+| --- | --- | --- |
+| **Expo Router app shell** | Provides screen routing, root providers, status bar, bottom navigation, safe-area handling, and notification tap navigation. | `app/_layout.tsx`, `app/*.tsx`, Expo Router |
+| **Dashboard screen** | Presents current alert context, barangay risk profile, checklist status, family check-in state, and immediate action prompts. | `app/dashboard.tsx`, Zustand selectors, readiness rules |
+| **Household profile screen** | Captures location, family needs, transport availability, pets, and emergency contacts. | `app/household.tsx`, SQLite-backed store actions |
+| **Checklist screen** | Tracks seeded and custom go-bag items with progress, filters, edit/delete controls, and critical-item warnings. | `app/checklist.tsx`, `src/components/ChecklistRow.tsx` |
+| **Readiness rules engine** | Converts household profile, hazard profile, and bulletin state into action-oriented preparedness guidance. | `src/rules/planRules.ts` |
+| **Offline card service** | Builds a durable emergency snapshot containing household, contacts, risk, checklist, and latest guidance. | `src/services/offlineCard.ts`, `offline_card_snapshots` table |
+| **Zustand app store** | Coordinates app state, optimistic UI updates, SQLite writes, notifications, check-ins, and reset-to-seed behavior. | `src/store/useVoltStore.ts`, Zustand |
+| **SQLite data layer** | Owns schema migration, seeded demo data, local CRUD operations, notification preferences, check-ins, and snapshots. | `src/db/index.ts`, `volt-local.db`, `DATABASE_VERSION = 1` |
+| **Bulletin API client** | Calls backend bulletin endpoints and exposes typed functions for latest, by-id, and explanation requests. | `src/services/taalBulletinApi.ts`, `app.json` `expo.extra.taalBulletinApiBaseUrl` |
+| **React Query hooks** | Caches bulletin and explanation requests with retry and stale-time behavior. | `src/hooks/useTaalBulletins.ts`, `staleTime = 30 minutes` |
+| **Backend bulletin service** | Discovers, fetches, parses, and caches PHIVOLCS Taal bulletin pages. | `backend/services/taalBulletins.service.js`, Axios, Cheerio |
+| **Gemini explainer service** | Sends JSON-mode bulletin prompts to Gemini, caches explanations, tracks provider status, and falls back safely. | `backend/services/gemini.service.js`, default model `gemini-2.5-flash-lite` |
+| **Rule-based explainer** | Generates deterministic explanation sections when Gemini is missing, unavailable, or invalid. | `backend/utils/explainBulletin.js` |
+| **SMS check-in service** | Builds family status messages, normalizes recipients, opens native SMS composer, and reports fallback state. | `src/services/checkInSms.ts`, `expo-sms` |
+| **Local notification service** | Requests permission, creates Android channel, schedules/cancels daily reminders, and routes notification taps. | `src/services/notifications.ts`, `expo-notifications` |
+| **Design system primitives** | Provides shared cards, buttons, badges, progress bars, form controls, shell layout, and theme tokens. | `src/components/*.tsx`, `src/constants/theme.ts`, `lucide-react-native` |
+
+> **Configuration note:** Core app configuration lives in `app.json`, TypeScript settings live in `tsconfig.json`, root mobile scripts live in `package.json`, backend scripts and dependencies live in `backend/package.json`, and backend environment values are loaded from `backend/.env`.
+
+## Provider / System Modes
+
+| Mode | How It Works | Status |
+| --- | --- | --- |
+| **Offline-first local mode** | The app initializes SQLite, seeds mock household/hazard/checklist/bulletin data, and keeps readiness state available on-device. | Implemented |
+| **Live PHIVOLCS bulletin mode** | The backend scrapes PHIVOLCS Taal bulletin pages, parses valid bulletin content, and caches successful responses for 30 minutes. | Implemented |
+| **Gemini-backed explanation mode** | The backend sends a constrained JSON prompt to Gemini when `GEMINI_API_KEY` is configured and valid. | Implemented / optional |
+| **Rule-based explanation fallback** | If Gemini is unavailable, unconfigured, times out, or returns invalid content, the backend returns deterministic safety guidance. | Implemented |
+| **SMS composer mode** | The app uses `expo-sms` to open the native SMS composer with saved emergency contacts and a generated check-in message. | Implemented |
+| **SMS fallback mode** | If SMS is unavailable or there are no usable recipients, VOLT saves the check-in locally and displays a copyable fallback message. | Implemented |
+| **Local reminder mode** | The app schedules daily local reminders for go-bag checks and bulletin review after notification permission is granted. | Implemented |
+| **Remote push notifications** | Remote push token registration and push delivery are intentionally deferred for a future EAS/dev-build backend phase. | Planned / not live |
+| **Live LGU integration** | Local government pickup points, shelter assignments, and responder systems are not wired into the app. | Planned / not live |
+
+## Validation Status
+
+| Area | Evidence | Status |
+| --- | --- | --- |
+| **TypeScript typecheck** | `npm.cmd run typecheck` completed successfully with `tsc --noEmit`. | Passing |
+| **Backend syntax check** | `node --check` passed for `backend/server.js`, route modules, services, and utility files. | Passing |
+| **Local mobile run path** | Root `package.json` exposes `start`, `android`, `ios`, and `web` Expo commands. | Implemented |
+| **Backend run path** | `backend/package.json` exposes `start`, running `node --use-system-ca server.js`. | Implemented |
+| **API routes** | Express serves `/health` and `/api/bulletins/taal/*` routes for latest, by-id, explain, and Gemini status. | Implemented |
+| **Local persistence** | SQLite migration, seeded data, CRUD operations, check-ins, reminders, and offline snapshots are implemented. | Implemented |
+| **Production build script** | No root `build` or `preview` script is currently defined in `package.json`. | Not configured |
+| **Automated tests** | No `test` script, test runner, or automated test suite is currently configured. | Not configured |
+| **Real integrations** | PHIVOLCS bulletin scraping is live-network dependent; Gemini is optional; LGU systems and remote push are not live. | Partial |
+
+## Tech Stack
+
+- **Mobile frontend:** Expo `~55.0.24`, React Native `0.83.6`, React `19.2.0`, Expo Router.
+- **Routing and shell:** `expo-router`, `react-native-safe-area-context`, `react-native-gesture-handler`, `react-native-screens`.
+- **State management:** Zustand.
+- **Data fetching:** TanStack React Query.
+- **Local persistence:** `expo-sqlite` with a versioned SQLite schema and seeded local data.
+- **Native device capabilities:** `expo-sms`, `expo-notifications`, `expo-linking`, `expo-constants`.
+- **Styling:** React Native `StyleSheet`, shared theme tokens, reusable UI primitives.
+- **Icons:** `lucide-react-native` and Expo vector icon dependencies.
+- **Backend:** Node.js, Express `5.2.1`, CORS, dotenv.
+- **Bulletin scraping:** Axios and Cheerio.
+- **AI provider:** Google Gemini REST API through Axios with rule-based fallback.
+- **Language and tooling:** TypeScript strict mode, npm, Expo Metro bundler.
+
+## Project Structure
+
+```text
+.
+├── app/                                      # Expo Router screens and root layout
+│   ├── _layout.tsx                           # App providers, SQLite initialization, stack setup, notification tap routing
+│   ├── index.tsx                             # Route alias to dashboard
+│   ├── dashboard.tsx                         # Risk dashboard and immediate actions
+│   ├── bulletin.tsx                          # Live Taal bulletin and explainer UI
+│   ├── plan.tsx                              # Household-specific readiness plan
+│   ├── checklist.tsx                         # Go-bag checklist and custom items
+│   ├── check-in.tsx                          # SMS family check-in flow
+│   ├── household.tsx                         # Household profile and emergency contacts
+│   ├── offline-card.tsx                      # Offline emergency card snapshot
+│   └── settings.tsx                          # Local notification permissions and reminders
+├── src/
+│   ├── components/                           # Shared shell, form controls, checklist row, and UI primitives
+│   │   ├── AppShell.tsx
+│   │   ├── ChecklistRow.tsx
+│   │   ├── forms.tsx
+│   │   └── ui.tsx
+│   ├── constants/
+│   │   └── theme.ts                          # Colors, typography, radii, and shadows
+│   ├── data/
+│   │   └── mockData.ts                       # Seed household, hazard profiles, bulletin, and checklist data
+│   ├── db/
+│   │   └── index.ts                          # SQLite schema, migrations, seed data, and persistence functions
+│   ├── hooks/
+│   │   └── useTaalBulletins.ts               # React Query hooks for bulletin API calls
+│   ├── rules/
+│   │   └── planRules.ts                      # Readiness action rules
+│   ├── services/
+│   │   ├── ai.ts                             # Local mock explainer utility retained for demo-style interpretation
+│   │   ├── bulletin.ts                       # Local bulletin lookup and hazard profile matching
+│   │   ├── checkInSms.ts                     # SMS message builder and composer integration
+│   │   ├── notifications.ts                  # Local notification scheduling and tap handling
+│   │   ├── offlineCard.ts                    # Offline card payload builder
+│   │   ├── storage.ts                        # Shared storage key constants
+│   │   └── taalBulletinApi.ts                # Backend API client and response types
+│   ├── store/
+│   │   └── useVoltStore.ts                   # Zustand state store and app actions
+│   ├── types/
+│   │   └── index.ts                          # Shared app domain types
+│   └── utils/
+│       └── id.ts                             # Local ID generator
+├── backend/
+│   ├── routes/
+│   │   └── taalBulletins.routes.js           # Express routes for Taal bulletin API
+│   ├── services/
+│   │   ├── gemini.service.js                 # Gemini provider, cache, sanitization, fallback orchestration
+│   │   └── taalBulletins.service.js          # PHIVOLCS scraping, parsing, discovery, and cache
+│   ├── utils/
+│   │   ├── buildGeminiBulletinPrompt.js      # JSON-schema prompt builder
+│   │   └── explainBulletin.js                # Rule-based fallback explanation
+│   ├── .env.example                          # Backend environment example
+│   ├── package.json                          # Backend dependencies and start script
+│   └── server.js                             # Express app, middleware, health route, and error handling
+├── app.json                                  # Expo app config, scheme, plugins, backend base URL
+├── babel.config.js                           # Babel configuration for Expo
+├── package.json                              # Mobile app dependencies and scripts
+├── package-lock.json                         # Root dependency lockfile
+├── tsconfig.json                             # Strict TypeScript config
+├── VOLT - Volcanic Operations and Lifesaving Tracker.docx # Project document artifact
+├── VOLT - Volcanic Operations and Lifesaving Tracker.pen  # Design artifact
+└── README.md
+```
+
+## API Endpoints
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Backend health check returning `{ "ok": true }`. |
+| `GET` | `/api/bulletins/taal/latest` | Discovers and returns the latest valid Taal bulletin parsed from PHIVOLCS. |
+| `GET` | `/api/bulletins/taal/latest/explain` | Returns an explanation for the latest bulletin using Gemini or rule-based fallback. |
+| `GET` | `/api/bulletins/taal/debug/gemini` | Returns public Gemini provider status, configuration state, model, and latest error metadata. |
+| `GET` | `/api/bulletins/taal/:id` | Returns a specific PHIVOLCS Taal bulletin by positive integer bulletin ID. |
+| `GET` | `/api/bulletins/taal/:id/explain` | Returns an explanation for a specific bulletin without additional context. |
+| `POST` | `/api/bulletins/taal/:id/explain` | Returns an explanation for a specific bulletin with optional sanitized household and risk context. |
+
+Example explanation request:
+
+```json
+{
+  "household": {
+    "elderly": true,
+    "children": 1,
+    "infants": 0,
+    "asthma": true,
+    "mobilityIssues": false,
+    "pets": true,
+    "vehicleAvailable": false
+  },
+  "riskProfile": {
+    "barangay": "Banga, Talisay, Batangas",
+    "hazards": ["ashfall", "volcanic gas", "lake hazard"]
+  }
+}
+```
+
+Example explanation response shape:
+
+```json
+{
+  "id": 13947,
+  "sourceUrl": "https://wovodat.phivolcs.dost.gov.ph/bulletin/activity-tvo?bid=13947&lang=en",
+  "model": "gemini-2.5-flash-lite",
+  "whatHappened": [
+    "The bulletin reports observed activity for Taal Volcano."
+  ],
+  "whatItMeans": [
+    "Treat this as a source-grounded readiness summary, not a forecast."
+  ],
+  "whatToAvoid": [
+    "Avoid acting on rumors or unofficial volcano updates."
+  ],
+  "whatToPrepare": [
+    "Keep monitoring PHIVOLCS and local government instructions."
+  ],
+  "highRiskPeople": [
+    "People who need help moving, children, elderly people, and those sensitive to ash or gas may need extra support."
+  ],
+  "uncertainty": "This explanation is based only on the official bulletin text provided.",
+  "safetyNote": "Always follow official PHIVOLCS advisories and local government instructions.",
+  "generatedAt": "2026-05-17T13:00:00.000Z",
+  "fallback": false
+}
+```
+
+## Local Setup
+
+1. **Install mobile app dependencies.**
+
+```bash
+npm install
+```
+
+2. **Install backend dependencies.**
+
+```bash
+cd backend
+npm install
+cd ..
+```
+
+3. **Create backend environment file.**
+
+```bash
+cd backend
+copy .env.example .env
+cd ..
+```
+
+Edit `backend/.env` and add a Gemini key if AI-backed explanations are required. Without a valid key, the backend still works through the rule-based fallback.
+
+4. **Configure the mobile app backend URL.**
+
+Update `app.json` so the Expo app can reach the backend from the target device:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "taalBulletinApiBaseUrl": "http://192.168.1.103:3000"
+    }
+  }
+}
+```
+
+Use a LAN IP for Expo Go on a physical device. For browser-based web testing on the same machine, `localhost` may be appropriate. For Android emulator workflows, the backend may need an emulator-accessible host such as `10.0.2.2`.
+
+5. **Start the backend API.**
+
+```bash
+cd backend
+npm start
+```
+
+The backend listens on:
+
+```text
+http://0.0.0.0:3000
+```
+
+6. **Start the Expo development server in a second terminal.**
+
+```bash
+npm start
+```
+
+Then choose the desired target from Expo:
+
+```text
+a = Android
+i = iOS
+w = Web
+```
+
+You can also launch platform-specific commands directly:
+
+```bash
+npm run android
+npm run ios
+npm run web
+```
+
+7. **Run the TypeScript check.**
+
+```bash
+npm run typecheck
+```
+
+8. **Production build / preview status.**
+
+No production `build` or `preview` script is currently defined in the root `package.json`. For submission-grade packaging, add an Expo export or EAS build path, then document the final command here.
+
+## Scripts
+
+| Script | Command | Description |
+| --- | --- | --- |
+| `start` | `expo start` | Starts the Expo development server. |
+| `android` | `expo start --android` | Starts Expo and opens the Android target. |
+| `ios` | `expo start --ios` | Starts Expo and opens the iOS target. |
+| `web` | `expo start --web` | Starts Expo for web through the configured Metro web bundler. |
+| `typecheck` | `tsc --noEmit` | Runs strict TypeScript validation without emitting files. |
+| `backend:start` | `cd backend && npm start` | Starts the Express bulletin backend. This is not a root package script, but is the backend run path. |
+| `test` | Not configured | No automated test command is currently defined. |
+| `build` | Not configured | No production build command is currently defined. |
+
+Backend package script:
+
+| Script | Command | Description |
+| --- | --- | --- |
+| `start` | `node --use-system-ca server.js` | Starts the VOLT bulletin backend with system CA support. |
+
+## Environment Variables
+
+Backend variables are loaded from `backend/.env` through `dotenv`.
+
+```env
+# Optional. If omitted or left as the placeholder value, VOLT uses rule-based explanations.
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional. Defaults to gemini-2.5-flash-lite.
+GEMINI_MODEL=gemini-2.5-flash-lite
+
+# Optional. Defaults to 10000 milliseconds.
+GEMINI_TIMEOUT_MS=10000
+
+# Optional. Defaults to 3000.
+PORT=3000
+```
+
+Client backend URL configuration currently lives in `app.json`, not in a `.env` file:
+
+```json
+{
+  "expo": {
+    "extra": {
+      "taalBulletinApiBaseUrl": "http://192.168.1.103:3000"
+    }
+  }
+}
+```
+
+## Deployment / Submission Notes
+
+- **Mobile app delivery:** The repository is Expo-first. Development is ready through Expo commands, but production packaging should be finalized through Expo export or EAS build before a release submission.
+- **Backend delivery:** The Express backend runs separately from the mobile app and must be reachable from the device or browser running the Expo client.
+- **Live bulletin dependency:** PHIVOLCS scraping depends on the availability and HTML structure of the source bulletin pages. The backend uses a non-aggressive request pattern and 30-minute caching.
+- **AI safety boundary:** Gemini explanations are constrained to official bulletin text and optional sanitized context. The fallback path avoids making forecasts or inventing official instructions.
+- **Offline behavior:** Household profile, emergency contacts, checklist state, check-ins, notification preferences, and emergency card snapshots persist locally in SQLite.
+- **Security warning:** Do not commit `backend/.env` or real API keys. The example file contains only a placeholder.
+- **Current integration scope:** PHIVOLCS bulletin retrieval is live-network capable; Gemini is optional; LGU dispatch systems, real shelter assignment feeds, authentication, and remote push notification infrastructure are not wired in.
+- **Submission readiness:** VOLT is well-positioned as a functional hackathon prototype: the core mobile flows are implemented, local persistence is durable, backend bulletin routes exist, Gemini fallback behavior is handled, and TypeScript validation currently passes.
